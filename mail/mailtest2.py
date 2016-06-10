@@ -1,13 +1,14 @@
 from __future__ import print_function
 import httplib2
-import os
 
 from apiclient import discovery
 from apiclient import errors
 import oauth2client
 from oauth2client import client
 from oauth2client import tools
-import talks
+import base64
+from email.mime.text import MIMEText
+import os
 
 try:
     import argparse
@@ -17,7 +18,7 @@ except ImportError:
 
 # If modifying these scopes, delete your previously saved credentials
 # at ~/.credentials/gmail-python-quickstart.json
-SCOPES = 'https://www.googleapis.com/auth/gmail.readonly'
+SCOPES = ['https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/gmail.compose', 'https://mail.google.com']
 CLIENT_SECRET_FILE = 'client_secret.json'
 APPLICATION_NAME = 'Gmail API Python Quickstart'
 
@@ -50,46 +51,44 @@ def get_credentials():
         print('Storing credentials to ' + credential_path)
     return credentials
 
-def ListThreadsWithLabels(service, user_id, label_ids=[]):
-  """List all Threads of the user's mailbox with label_ids applied.
+def SendMessage(service, user_id, message):
+  """Send an email message.
 
   Args:
     service: Authorized Gmail API service instance.
     user_id: User's email address. The special value "me"
     can be used to indicate the authenticated user.
-    label_ids: Only return Threads with these labelIds applied.
+    message: Message to be sent.
 
   Returns:
-    List of threads that match the criteria of the query. Note that the returned
-    list contains Thread IDs, you must use get with the appropriate
-    ID to get the details for a Thread.
+    Sent Message.
   """
   try:
-    response = service.users().threads().list(userId=user_id,
-                                              labelIds=label_ids).execute()
-    threads = []
-    if 'threads' in response:
-      threads.extend(response['threads'])
-
-    while 'nextPageToken' in response:
-      page_token = response['nextPageToken']
-      response = service.users().threads().list(userId=user_id,
-                                                labelIds=label_ids,
-                                                pageToken=page_token).execute()
-      threads.extend(response['threads'])
-
-    j=0
-    for i in threads:
-        if(j<5):
-            print (i['snippet'])
-            talks.main(str(i['snippet']))
-            j=j+1
-        else:
-            break
-
+    message = (service.users().messages().send(userId=user_id, body=message)
+               .execute())
+    print ('Message Id: %s' % message['id'])
+    return message
   except errors.HttpError, error:
       print ('An error occurred: %s' % error)
 
+
+def CreateMessage(sender, to, subject, message_text):
+  """Create a message for an email.
+
+  Args:
+    sender: Email address of the sender.
+    to: Email address of the receiver.
+    subject: The subject of the email message.
+    message_text: The text of the email message.
+
+  Returns:
+    An object containing a base64 encoded email object.
+  """
+  message = MIMEText(message_text)
+  message['to'] = to
+  message['from'] = sender
+  message['subject'] = subject
+  return {'raw': base64.b64encode(message.as_string())}
 
 def main():
     """Shows basic usage of the Gmail API.
@@ -100,9 +99,14 @@ def main():
     credentials = get_credentials()
     http = credentials.authorize(httplib2.Http())
     service = discovery.build('gmail', 'v1', http=http)
-    label = ['UNREAD']
 
-    ListThreadsWithLabels(service, 'me', label)
+    sender = 'asitavasarkar@gmail.com'
+    to = 'asitav@hotmail.com'
+    subject = 'hi'
+    message_text = 'how are you'
+
+    message = CreateMessage(sender, to, subject, message_text)
+    SendMessage(service,'me', message)
 
 if __name__ == '__main__':
     main()
